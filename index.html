@@ -129,29 +129,35 @@ const AV = {
 };
 
 /* ---------- CHIBIS reales (sprites generados) ----------
-   Modo 'sprite': en vez de dibujar por codigo, usa una imagen PNG.
+   Cada miembro tiene su propia hoja de 4 poses de caminata (mismo personaje, cambian piernas).
    Nombres reales puestos a pedido de Juan (demo personal, no comercial). */
 const CHIBIS = [
-  { id:'ch1', name:'Chan',    hairColor:'#f2d06b', hairStyle:'corto',   top:'camiseta', topColor:'#1a1430', pants:'jeans',  pantColor:'#2b2b45' },
-  { id:'ch2', name:'Han',     hairColor:'#6b4a2f', hairStyle:'flequillo', top:'hoodie',  topColor:'#3a6bd9', pants:'jeans',  pantColor:'#2b2b45' },
-  { id:'ch3', name:'Hyunjin', hairColor:'#4a3020', hairStyle:'largo',   top:'hoodie',   topColor:'#1a1430', pants:'jeans',  pantColor:'#1a1430' }
+  { id:'chan',     name:'Chan',     hairColor:'#f2d06b', hairStyle:'corto',     top:'camiseta', topColor:'#1a1430', pants:'jeans', pantColor:'#2b2b45' },
+  { id:'han',      name:'Han',      hairColor:'#6b4a2f', hairStyle:'flequillo', top:'hoodie',   topColor:'#3a6bd9', pants:'jeans', pantColor:'#2b2b45' },
+  { id:'hyunjin',  name:'Hyunjin',  hairColor:'#4a3020', hairStyle:'largo',     top:'hoodie',   topColor:'#1a1430', pants:'jeans', pantColor:'#1a1430' },
+  { id:'changbin', name:'Changbin', hairColor:'#3a2a1a', hairStyle:'corto',     top:'camiseta', topColor:'#d9343a', pants:'jeans', pantColor:'#101018' },
+  { id:'felix',    name:'Felix',    hairColor:'#e8dcb0', hairStyle:'corto',     top:'camiseta', topColor:'#5a6b2f', pants:'jeans', pantColor:'#101018' },
+  { id:'seungmin', name:'Seungmin', hairColor:'#a0784a', hairStyle:'corto',     top:'camiseta', topColor:'#f2f2f2', pants:'jeans', pantColor:'#3a5a8c' },
+  { id:'in',       name:'I.N',      hairColor:'#151515', hairStyle:'corto',     top:'camiseta', topColor:'#f2c631', pants:'jeans', pantColor:'#2b2b45' }
 ];
-const SPRITE_PATH = { ch1:'./img/ch1.png', ch2:'./img/ch2.png', ch3:'./img/ch3.png' };
-/* Frames del ciclo de caminata (chibi real generado, 4 poses). */
-/* Base unica del chibi SKZ (mismo dibujo) + animacion por transformacion estable,
-   sin cambios de tamano entre frames (evita el "se hace chiquito y grande"). */
-/* Sprite de caminata HECHO A MANO (pack CC0, 12 frames) alineado por los pies.
-   Mismo personaje en todos los frames: solo cambian las piernas => sin "latido". */
-/* Sprite de caminata HECHO A MANO con el LOOK DE CHAN (12 frames, pelo rubio + camiseta negra + jeans).
-   Mismo personaje en todos los frames: solo cambian las piernas => sin "latido". */
-const WALK_FRAMES = ['./img/c4n/f0.png','./img/c4n/f1.png','./img/c4n/f2.png','./img/c4n/f3.png'];
-const walkImgs = WALK_FRAMES.map(src => { const im = new Image(); im.src = src; return im; });
-const spriteImgs = {};
-Object.entries(SPRITE_PATH).forEach(([k,src]) => {
-  const im = new Image(); im.src = src; spriteImgs[k] = im;
+/* Frames de caminata por miembro (cada uno = 4 poses del MISMO chibi). */
+const WALK_SETS = {
+  chan:     ['./img/c4n/f0.png','./img/c4n/f1.png','./img/c4n/f2.png','./img/c4n/f3.png'],
+  han:      ['./img/han/f0.png','./img/han/f1.png','./img/han/f2.png','./img/han/f3.png'],
+  hyunjin:  ['./img/hyunjin/f0.png','./img/hyunjin/f1.png','./img/hyunjin/f2.png','./img/hyunjin/f3.png'],
+  changbin: ['./img/changbin/f0.png','./img/changbin/f1.png','./img/changbin/f2.png','./img/changbin/f3.png'],
+  felix:    ['./img/felix/f0.png','./img/felix/f1.png','./img/felix/f2.png','./img/felix/f3.png'],
+  seungmin: ['./img/seungmin/f0.png','./img/seungmin/f1.png','./img/seungmin/f2.png','./img/seungmin/f3.png'],
+  in:       ['./img/in/f0.png','./img/in/f1.png','./img/in/f2.png','./img/in/f3.png']
+};
+/* Precarga de TODAS las hojas de caminata */
+const walkSetsImgs = {};
+Object.entries(WALK_SETS).forEach(([k,arr]) => {
+  walkSetsImgs[k] = arr.map(src => { const im = new Image(); im.src = src; return im; });
 });
-let usingSprite = true;   // arranca en el sprite de caminata real (chibi hecho a mano)
-let activeChibi = 'ch1';
+const CHIBI_IDS = CHIBIS.map(c => c.id);
+let walkImgs = walkSetsImgs.chan;       // set activo (arranca con Chan)
+let activeChibi = 'chan';
 
 /* Aplica el look de un miembro al rig animado (envuelve AV temporalmente). */
 function withChibiLook(chibi, fn){
@@ -220,7 +226,7 @@ build('skins', SKINS, 'skin', true);
   CHIBIS.forEach(c=>{
     const el = document.createElement('div');
     el.className='chip'; el.textContent=c.name; el.dataset.v=c.id;
-    el.onclick=()=>{ activeChibi=c.id; [...box.children].forEach(x=>x.classList.toggle('on',x===el)); };
+    el.onclick=()=>{ activeChibi=c.id; walkImgs = walkSetsImgs[c.id] || walkImgs; [...box.children].forEach(x=>x.classList.toggle('on',x===el)); };
     box.appendChild(el);
   });
   markOn('chibiSel', activeChibi);

@@ -23,10 +23,21 @@ Lo que **sí** funciona:
 ## Estructura
 
 ```
-index.html      # todo el juego (canvas + lógica + animación)
-img/c4n/f0..3.png  # frames del ciclo de caminata (chibi real, 4 poses)
-img/ch1..3.png     # sprites de personajes (Chan, Han, Hyunjin)
+index.html        # todo el juego (canvas + lógica + animación + selector)
+img/<miembro>/    # hoja de caminata de cada uno (f0..f3.png = 4 poses)
+  c4n/      -> Chan
+  han/      -> Han
+  hyunjin/  -> Hyunjin
+  changbin/ -> Changbin
+  felix/    -> Felix
+  seungmin/ -> Seungmin
+  in/       -> I.N
 ```
+
+## Personajes
+
+Puedes **elegir integrante en pantalla** con los chips de arriba; cada uno tiene su propia
+hoja de caminata (mismo método: chibi de referencia -> 4 poses consistentes).
 
 ## Correr en local
 
