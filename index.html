@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>STAY WORLD — demo avatar</title>
+<style>
+  :root{ --pink:#ff3d7f; --cyan:#4de3ff; --panel:#171330; --line:#2a2450; --muted:#9a92c4; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0d0b1a;color:#f2f0ff;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  #wrap{width:100%;max-width:720px;margin:0 auto;padding:8px 10px;
+    display:flex;flex-direction:column;height:100%}
+  header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  h1{margin:0;font-size:20px;letter-spacing:1px;
+     background:linear-gradient(90deg,var(--pink),var(--cyan));
+     -webkit-background-clip:text;background-clip:text;color:transparent}
+  .coins{font-size:13px;color:#ffd166;font-weight:700}
+
+  #stage{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);
+    background:#0f0c22;flex:1;min-height:0;touch-action:none}
+  canvas{display:block;width:100%;height:100%}
+
+  #hint{position:absolute;left:50%;top:16px;transform:translateX(-50%);
+    font-size:12px;color:#cfc7ff;background:rgba(13,11,26,.7);padding:5px 12px;border-radius:99px;
+    pointer-events:none;transition:opacity .5s}
+  #panel{margin-top:8px;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:10px 12px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .tab{flex:1;min-width:70px;padding:7px 4px;border-radius:9px;border:1px solid var(--line);
+    background:#201a3d;color:#cfc7ff;font-size:12px;font-weight:600;cursor:pointer}
+  .tab.on{background:linear-gradient(90deg,var(--pink),var(--cyan));color:#12081c;border-color:transparent}
+  .row{display:none}
+  .row.on{display:block}
+  .grp{margin-bottom:9px}
+  .glabel{font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:5px;text-transform:uppercase}
+  .swatches,.chips{display:flex;gap:7px;flex-wrap:wrap}
+  .sw{width:30px;height:30px;border-radius:50%;cursor:pointer;border:2px solid #3a3270}
+  .sw.on{border-color:#fff;transform:scale(1.12)}
+  .chip{padding:6px 11px;border-radius:9px;background:#201a3d;border:1px solid var(--line);
+    color:#cfc7ff;font-size:13px;cursor:pointer}
+  .chip.on{background:#3a2b6e;border-color:var(--cyan);color:#fff}
+  .foot{text-align:center;color:#544b85;font-size:10px;margin-top:6px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <h1>STAY WORLD</h1>
+    <div class="coins">★ <span id="coins">0</span></div>
+  </header>
+
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="hint">Flechas / WASD para moverte · recoge ★</div>
+  </div>
+
+  <div id="panel">
+    <div class="tabs">
+      <button class="tab on" data-t="look">Personaje</button>
+      <button class="tab" data-t="hair">Pelo</button>
+      <button class="tab" data-t="cloth">Ropa</button>
+      <button class="tab" data-t="acc">Extras</button>
+      <button class="tab" id="autoTab" style="flex:0 0 auto">🤖 Auto</button>
+    </div>
+
+    <!-- PERSONAJE -->
+    <div class="row on" id="row-look">
+      <div class="grp"><div class="glabel">Modo</div>
+        <div class="chips" id="modeSel"></div></div>
+      <div class="grp" id="spriteGrp" style="display:none"><div class="glabel">Chibi</div>
+        <div class="chips" id="chibiSel"></div></div>
+      <div class="grp" id="codeGrp"><div class="glabel">Skin</div>
+        <div class="chips" id="skins"></div></div>
+    </div>
+
+    <!-- PELO -->
+    <div class="row" id="row-hair">
+      <div class="grp"><div class="glabel">Estilo</div>
+        <div class="chips" id="hairStyles"></div></div>
+      <div class="grp"><div class="glabel">Color</div>
+        <div class="swatches" id="hairColors"></div></div>
+    </div>
+
+    <!-- ROPA -->
+    <div class="row" id="row-cloth">
+      <div class="grp"><div class="glabel">Top</div>
+        <div class="chips" id="tops"></div></div>
+      <div class="grp"><div class="glabel">Color top</div>
+        <div class="swatches" id="topColors"></div></div>
+      <div class="grp"><div class="glabel">Pantalón</div>
+        <div class="chips" id="pants"></div></div>
+      <div class="grp"><div class="glabel">Color pantalón</div>
+        <div class="swatches" id="pantColors"></div></div>
+    </div>
+
+    <!-- EXTRAS -->
+    <div class="row" id="row-acc">
+      <div class="grp"><div class="glabel">Cabeza</div>
+        <div class="chips" id="accs"></div></div>
+      <div class="grp"><div class="glabel">Mano</div>
+        <div class="chips" id="hands"></div></div>
+    </div>
+
+    <div class="foot">Demo fan-made · sin afiliación con JYP Entertainment.</div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   STAY WORLD — demo de avatar chibi personalizable + mundo con movimiento.
+   Todo dibujado por capas en canvas 2D. Sin assets externos.
+   ========================================================================= */
+
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+
+/* ---------- estado (avatar) ---------- */
+const AV = {
+  skin:'#ffe0c2',
+  hairStyle:'corto',
+  hairColor:'#ff7ab8',
+  top:'hoodie',
+  topColor:'#ffffff',
+  pants:'jeans',
+  pantColor:'#2b2b45',
+  acc:'ninguno',
+  hand:'micro'
+};
+
+/* ---------- CHIBIS reales (sprites generados) ----------
+   Modo 'sprite': en vez de dibujar por codigo, usa una imagen PNG.
+   Nombres reales puestos a pedido de Juan (demo personal, no comercial). */
+const CHIBIS = [
+  { id:'ch1', name:'Chan',    hairColor:'#f2d06b', hairStyle:'corto',   top:'camiseta', topColor:'#1a1430', pants:'jeans',  pantColor:'#2b2b45' },
+  { id:'ch2', name:'Han',     hairColor:'#6b4a2f', hairStyle:'flequillo', top:'hoodie',  topColor:'#3a6bd9', pants:'jeans',  pantColor:'#2b2b45' },
+  { id:'ch3', name:'Hyunjin', hairColor:'#4a3020', hairStyle:'largo',   top:'hoodie',   topColor:'#1a1430', pants:'jeans',  pantColor:'#1a1430' }
+];
+const SPRITE_PATH = { ch1:'./img/ch1.png', ch2:'./img/ch2.png', ch3:'./img/ch3.png' };
+/* Frames del ciclo de caminata (chibi real generado, 4 poses). */
+/* Base unica del chibi SKZ (mismo dibujo) + animacion por transformacion estable,
+   sin cambios de tamano entre frames (evita el "se hace chiquito y grande"). */
+/* Sprite de caminata HECHO A MANO (pack CC0, 12 frames) alineado por los pies.
+   Mismo personaje en todos los frames: solo cambian las piernas => sin "latido". */
+/* Sprite de caminata HECHO A MANO con el LOOK DE CHAN (12 frames, pelo rubio + camiseta negra + jeans).
+   Mismo personaje en todos los frames: solo cambian las piernas => sin "latido". */
+const WALK_FRAMES = ['./img/c4n/f0.png','./img/c4n/f1.png','./img/c4n/f2.png','./img/c4n/f3.png'];
+const walkImgs = WALK_FRAMES.map(src => { const im = new Image(); im.src = src; return im; });
+const spriteImgs = {};
+Object.entries(SPRITE_PATH).forEach(([k,src]) => {
+  const im = new Image(); im.src = src; spriteImgs[k] = im;
+});
+let usingSprite = true;   // arranca en el sprite de caminata real (chibi hecho a mano)
+let activeChibi = 'ch1';
+
+/* Aplica el look de un miembro al rig animado (envuelve AV temporalmente). */
+function withChibiLook(chibi, fn){
+  const saved = { hairColor:AV.hairColor, hairStyle:AV.hairStyle, top:AV.top, topColor:AV.topColor, pants:AV.pants, pantColor:AV.pantColor };
+  AV.hairColor = chibi.hairColor; AV.hairStyle = chibi.hairStyle;
+  AV.top = chibi.top; AV.topColor = chibi.topColor;
+  AV.pants = chibi.pants; AV.pantColor = chibi.pantColor;
+  fn();
+  Object.assign(AV, saved);
+}
+
+/* ---------- paletas y opciones ---------- */
+const SKINS   = ['#ffe0c2','#f2c69b','#d99a6c','#a56a3f','#f7d9c4','#c98a5e'];
+const HAIRC   = ['#ff7ab8','#2a2440','#8b5cf6','#4de3ff','#ffd166','#ff5470','#3ddc84','#f2f0ff'];
+const TOPC    = ['#ffffff','#ff3d7f','#4de3ff','#ffd166','#8b5cf6','#1a1430','#3ddc84'];
+const PANTSC  = ['#2b2b45','#4de3ff','#1a1430','#8b5cf6','#d9d9e3','#ff5470'];
+const HAIRSTYLES = [['corto','Corto'],['largo','Largo'],['coleta','Coleta'],['flequillo','Flequillo']];
+const TOPS       = [['hoodie','Hoodie'],['camiseta','Camiseta'],['chaqueta','Chaqueta'],['vestido','Vestido']];
+const PANTSS     = [['jeans','Jeans'],['short','Short'],['falda','Falda']];
+const ACCS       = [['ninguno','—'],['gorro','Gorro'],['audifonos','Audífonos'],['lentes','Lentes'],['diadema','Diadema']];
+const HANDS      = [['ninguno','—'],['micro','Micrófono'],['globo','Globo'],['corazon','Corazón']];
+const SKINNAME   = ['P1','P2','P3','P4','P5','P6'];
+
+/* ---------- UI build ---------- */
+const $ = s => document.querySelector(s);
+function build(id, items, key, isColor){
+  const box = document.getElementById(id);
+  items.forEach((it, i) => {
+    const val = isColor ? it : it[0];
+    const el = document.createElement('div');
+    el.className = isColor ? 'sw' : 'chip';
+    if (isColor){ el.style.background = it; }
+    else { el.textContent = it[1]; }
+    el.dataset.v = val;
+    el.onclick = () => {
+      AV[key] = val;
+      [...box.children].forEach(c => c.classList.toggle('on', c === el));
+      drawStatic();
+    };
+    box.appendChild(el);
+  });
+}
+build('skins', SKINS, 'skin', true);
+
+/* selector de modo: avatar por codigo vs chibi real */
+(function(){
+  const modes = [['codigo','Avatar'],[','],['sprite','Chibis SKZ']];
+})();
+(function buildMode(){
+  const box = document.getElementById('modeSel');
+  const opts = [['codigo','Avatar'],['sprite','Chibis SKZ']];
+  opts.forEach(([v,label])=>{
+    const el = document.createElement('div');
+    el.className = 'chip'; el.textContent = label; el.dataset.v = v;
+    el.onclick = () => {
+      usingSprite = (v==='sprite');
+      document.getElementById('spriteGrp').style.display = usingSprite?'block':'none';
+      document.getElementById('codeGrp').style.display = usingSprite?'none':'block';
+      [...box.children].forEach(c=>c.classList.toggle('on', c===el));
+    };
+    box.appendChild(el);
+  });
+})();
+(function buildChibiSel(){
+  const box = document.getElementById('chibiSel');
+  CHIBIS.forEach(c=>{
+    const el = document.createElement('div');
+    el.className='chip'; el.textContent=c.name; el.dataset.v=c.id;
+    el.onclick=()=>{ activeChibi=c.id; [...box.children].forEach(x=>x.classList.toggle('on',x===el)); };
+    box.appendChild(el);
+  });
+  markOn('chibiSel', activeChibi);
+})();
+markOn('modeSel','sprite');
+// arrancar ya en modo Chibis SKZ: mostrar selector de chibi, ocultar avatar
+(function showSpriteGroups(){
+  document.getElementById('spriteGrp').style.display = 'block';
+  document.getElementById('codeGrp').style.display = 'none';
+})();
+build('hairStyles', HAIRSTYLES, 'hairStyle');
+build('hairColors', HAIRC, 'hairColor', true);
+build('tops', TOPS, 'top');
+build('topColors', TOPC, 'topColor', true);
+build('pants', PANTSS, 'pants');
+build('pantColors', PANTSC, 'pantColor', true);
+build('accs', ACCS, 'acc');
+build('hands', HANDS, 'hand');
+
+// marcar default "on"
+function markOn(boxId, val){
+  const box = document.getElementById(boxId);
+  [...box.children].forEach(c => c.classList.toggle('on', c.dataset.v === val));
+}
+markOn('skins', AV.skin); markOn('hairStyles', AV.hairStyle); markOn('hairColors', AV.hairColor);
+markOn('tops', AV.top); markOn('topColors', AV.topColor); markOn('pants', AV.pants);
+markOn('pantColors', AV.pantColor); markOn('accs', AV.acc); markOn('hands', AV.hand);
+
+// tabs
+document.querySelectorAll('.tab').forEach(t => {
+  if (t.id === 'autoTab') return;
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+    document.querySelectorAll('.row').forEach(r => r.classList.toggle('on', r.id === 'row-' + t.dataset.t));
+  };
+});
+// boton Auto
+document.getElementById('autoTab').onclick = function(){
+  if (AUTO.on) autoStop(); else autoStart();
+  this.classList.toggle('on', AUTO.on);
+};
+
+/* ---------- mundo ---------- */
+const world = { x:0, y:0, w:1600, h:900 };
+/* AUTO declarado aqui arriba para que el handler del boton no lo use antes de tiempo */
+const AUTO = { on:false, until:0, target:null, dur:10000, lastSwitch:0 };
+const player = { x: world.w/2, y: world.h/2, vx:0, vy:0, dir:1, speed:230, t:0, moving:false };
+const keys = {};
+addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; if(['arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase())) e.preventDefault(); });
+addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
+
+/* joystick táctil (móvil) */
+const stick = { active:false, id:null, ox:0, oy:0, dx:0, dy:0 };
+const RAD = 46;
+function stageRect(){ return document.getElementById('stage').getBoundingClientRect(); }
+function stickStart(e){
+  const r = stageRect();
+  stick.active = true; stick.id = e.pointerId;
+  stick.ox = e.clientX - r.left; stick.oy = e.clientY - r.top;
+  stick.dx = 0; stick.dy = 0;
+}
+function stickMove(e){
+  if (!stick.active || e.pointerId !== stick.id) return;
+  const r = stageRect();
+  let dx = (e.clientX - r.left) - stick.ox;
+  let dy = (e.clientY - r.top)  - stick.oy;
+  const m = Math.hypot(dx,dy) || 1;
+  const k = Math.min(1, m/RAD) / m;
+  stick.dx = dx*k; stick.dy = dy*k;
+}
+function stickEnd(e){
+  if (e.pointerId !== stick.id) return;
+  stick.active = false; stick.id = null; stick.dx = 0; stick.dy = 0;
+}
+cv.addEventListener('pointerdown', stickStart);
+cv.addEventListener('pointermove', stickMove);
+cv.addEventListener('pointerup', stickEnd);
+cv.addEventListener('pointercancel', stickEnd);
+cv.addEventListener('pointerleave', stickEnd);
+
+/* estrellitas del mundo */
+const coins = [];
+for (let i=0;i<14;i++){
+  coins.push({ x: 140 + (i*97)%(world.w-280), y: 140 + (i*143)%(world.h-280), got:false, t:Math.random()*6 });
+}
+let coinCount = 0;
+
+/* ---------- resize ---------- */
+let DPR = Math.min(devicePixelRatio||1, 2);
+function resize(){
+  const st = document.getElementById('stage');
+  cv.width  = st.clientWidth  * DPR;
+  cv.height = st.clientHeight * DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize', resize);
+
+/* ---------- dibujo del chibi por capas ---------- */
+function roundRect(c,x,y,w,h,r){
+  c.beginPath();
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+}
+
+/* Dibuja el chibi centrado en (0,0), escala s, mirando dir (+1 der)
+   walkAmt: 0 quieto .. 1 caminando a full (amortigua la animacion) */
+function drawChibi(c, s, dir, walkPhase, walkAmt){
+  walkAmt = (walkAmt==null)?1:walkAmt;
+  c.save();
+  c.scale(s*dir, s);
+  // ── RIG por partes: piernas y brazos rotan en contrafase real ──
+  const s_ = Math.sin(walkPhase);
+  const sw = 34*walkAmt;                 // amplitud de zancada (grados)
+  const legL =  s_*sw;                   // pierna izq adelante
+  const legR = -s_*sw;                   // pierna der atras
+  const armL =  s_*sw*0.85;              // brazo izq contrario a la pierna izq
+  const armR = -s_*sw*0.85;
+  const bob  = -Math.abs(s_)*3.2*walkAmt;   // el cuerpo sube al apoyar
+  const tilt = s_*0.045*walkAmt;            // leve balanceo
+  c.rotate(tilt);
+
+  // sombra (respira con el bob)
+  c.save(); c.scale(1,1);
+  c.fillStyle = 'rgba(0,0,0,.28)';
+  c.beginPath(); c.ellipse(0, 46, 22 - Math.abs(bob)*1.2, 6, 0, 0, 7); c.fill();
+  c.restore();
+
+  // PIERNAS
+  const legLen = (AV.pants==='short'?18:30);
+  c.fillStyle = AV.pantColor;
+  if (AV.pants === 'falda'){
+    c.beginPath(); c.moveTo(-16,16); c.lineTo(16,16); c.lineTo(22,34); c.lineTo(-22,34); c.closePath(); c.fill();
+  }
+  // pierna izq/der: rotan en la cadera
+  c.save(); c.translate(-8,16); c.rotate(legL*Math.PI/180);
+  roundRect(c,-5,0,10, legLen,4); c.fill(); c.restore();
+  c.save(); c.translate(8,16); c.rotate(legR*Math.PI/180);
+  roundRect(c,-5,0,10, legLen,4); c.fill(); c.restore();
+  // zapatos (siguen a su pierna)
+  c.fillStyle='#f2f0ff';
+  c.save(); c.translate(-8,16); c.rotate(legL*Math.PI/180);
+  roundRect(c,-7, legLen-3, 12, 7, 3); c.fill(); c.restore();
+  c.save(); c.translate(8,16); c.rotate(legR*Math.PI/180);
+  roundRect(c,-5, legLen-3, 12, 7, 3); c.fill(); c.restore();
+
+  // BRAZOS: rotan en el hombro, en contrafase
+  c.fillStyle = AV.skin;
+  c.save(); c.translate(-20, 2+bob); c.rotate(armL*Math.PI/180);
+  roundRect(c,-4,0,8,20,4); c.fill(); c.restore();
+  c.save(); c.translate(20, 2+bob); c.rotate(armR*Math.PI/180);
+  roundRect(c,-4,0,8,20,4); c.fill(); c.restore();
+
+  // TORSO / TOP
+  c.save(); c.translate(0, bob);
+  c.fillStyle = AV.topColor;
+  if (AV.top === 'vestido'){
+    c.beginPath(); c.moveTo(-17,-12); c.lineTo(17,-12); c.lineTo(24,22); c.lineTo(-24,22); c.closePath(); c.fill();
+  } else {
+    roundRect(c,-17,-14,34,30,9); c.fill();
+    if (AV.top === 'hoodie'){ // capucha
+      c.beginPath(); c.moveTo(-17,-12); c.quadraticCurveTo(0,-30,17,-12); c.lineTo(10,-6); c.quadraticCurveTo(0,-16,-10,-6); c.closePath(); c.fill();
+      c.fillStyle='rgba(0,0,0,.12)'; roundRect(c,-9,4,18,10,4); c.fill();
+    }
+    if (AV.top === 'chaqueta'){ // cuello
+      c.fillStyle='rgba(0,0,0,.18)'; roundRect(c,-6,-14,12,10,3); c.fill();
+    }
+  }
+  c.restore();
+
+  // CABEZA
+  c.save(); c.translate(0, (-6+bob));
+  // cuello
+  c.fillStyle = AV.skin; roundRect(c,-5,-2,10,8,3); c.fill();
+  // cara
+  c.fillStyle = AV.skin; c.beginPath(); c.arc(0,-16,19,0,7); c.fill();
+
+  // PELO (detrás/encima según estilo)
+  c.fillStyle = AV.hairColor;
+  if (AV.hairStyle === 'largo'){
+    c.beginPath(); c.ellipse(0,-14,22,24,0,0,7); c.fill();
+  }
+  // casquete base
+  c.beginPath(); c.arc(0,-18,20,Math.PI,0); c.fill();
+  if (AV.hairStyle === 'corto'){
+    roundRect(c,-20,-22,40,12,8); c.fill();
+  }
+  if (AV.hairStyle === 'flequillo'){
+    roundRect(c,-21,-24,42,14,8); c.fill();
+    c.beginPath(); c.moveTo(-21,-14); c.lineTo(-14,-2); c.lineTo(-6,-14); c.closePath(); c.fill();
+  }
+  if (AV.hairStyle === 'coleta'){
+    roundRect(c,-20,-22,40,12,8); c.fill();
+    // bolita
+    c.beginPath(); c.arc(-22,-24,9,0,7); c.fill();
+    c.beginPath(); c.arc(22,-24,9,0,7); c.fill();
+  }
+
+  // OJOS grandes brillantes
+  function eye(ex){
+    c.fillStyle='#4a2a1a';
+    c.beginPath(); c.ellipse(ex,-16,4.6,5.6,0,0,7); c.fill();
+    c.fillStyle='#2a160c';
+    c.beginPath(); c.ellipse(ex,-15,3,4,0,0,7); c.fill();
+    c.fillStyle='#fff';
+    c.beginPath(); c.arc(ex-1.4,-18,1.7,0,7); c.fill();
+    c.beginPath(); c.arc(ex+1.2,-14,0.9,0,7); c.fill();
+  }
+  eye(-7); eye(7);
+  // cejas
+  c.strokeStyle='rgba(60,35,20,.5)'; c.lineWidth=1.4;
+  c.beginPath(); c.moveTo(-10,-24); c.lineTo(-4,-25); c.moveTo(10,-24); c.lineTo(4,-25); c.stroke();
+  // mejillas
+  c.fillStyle='rgba(255,140,180,.55)';
+  c.beginPath(); c.arc(-13,-10,3.6,0,7); c.fill();
+  c.beginPath(); c.arc(13,-10,3.6,0,7); c.fill();
+  // boca
+  c.strokeStyle='#b1556f'; c.lineWidth=1.6;
+  c.beginPath(); c.arc(0,-8,4,0.15*Math.PI,0.85*Math.PI); c.stroke();
+  // aretes corazón
+  c.fillStyle='#ff3d7f';
+  heart(c,-20,-8,3); heart(c,20,-8,3);
+
+  // ACCESORIOS de cabeza
+  if (AV.acc === 'gorro'){
+    c.fillStyle='#ff3d7f';
+    c.beginPath(); c.arc(0,-24,20,Math.PI,0); c.fill();
+    roundRect(c,-22,-25,44,7,3); c.fill();
+    c.beginPath(); c.arc(0,-46,6,0,7); c.fill();
+  }
+  if (AV.acc === 'audifonos'){
+    c.strokeStyle='#4de3ff'; c.lineWidth=4;
+    c.beginPath(); c.arc(0,-18,22,Math.PI*1.05,Math.PI*1.95); c.stroke();
+    c.fillStyle='#4de3ff'; roundRect(c,-26,-20,8,14,3); c.fill(); roundRect(c,18,-20,8,14,3); c.fill();
+  }
+  if (AV.acc === 'lentes'){
+    c.strokeStyle='#1a1430'; c.lineWidth=2.4;
+    c.beginPath(); c.arc(-7,-16,7,0,7); c.stroke();
+    c.beginPath(); c.arc(7,-16,7,0,7); c.stroke();
+    c.beginPath(); c.moveTo(0,-16); c.lineTo(0,-16); c.stroke();
+    c.beginPath(); c.moveTo(-14,-16); c.lineTo(-20,-17); c.moveTo(14,-16); c.lineTo(20,-17); c.stroke();
+  }
+  if (AV.acc === 'diadema'){
+    c.strokeStyle='#ffd166'; c.lineWidth=3.5;
+    c.beginPath(); c.arc(0,-18,20,Math.PI*1.15,Math.PI*1.85); c.stroke();
+    c.fillStyle='#ffd166'; heart(c,0,-40,5);
+  }
+  c.restore();
+
+  // OBJETO EN LA MANO
+  if (AV.hand !== 'ninguno'){
+    c.save(); c.translate(24, 4+bob);
+    if (AV.hand === 'micro'){
+      c.fillStyle='#8b5cf6'; roundRect(c,-2,-16,4,20,2); c.fill();
+      c.fillStyle='#ff3d7f'; c.beginPath(); c.arc(0,-18,5,0,7); c.fill();
+    } else if (AV.hand === 'globo'){
+      c.strokeStyle='#cfc7ff'; c.lineWidth=1.2; c.beginPath(); c.moveTo(0,0); c.lineTo(0,-18); c.stroke();
+      c.fillStyle='#ff5470'; c.beginPath(); c.arc(0,-24,8,0,7); c.fill();
+    } else if (AV.hand === 'corazon'){
+      c.fillStyle='#ff3d7f'; heart(c,0,-14,9);
+    }
+    c.restore();
+  }
+
+  c.restore();
+}
+function heart(c,x,y,s){
+  c.save(); c.translate(x,y); c.beginPath();
+  c.moveTo(0,s*0.6);
+  c.bezierCurveTo(s*1.2,-s*0.4, s*0.5,-s*1.3, 0,-s*0.5);
+  c.bezierCurveTo(-s*0.5,-s*1.3, -s*1.2,-s*0.4, 0,s*0.6);
+  c.fill(); c.restore();
+}
+
+/* ---------- mundo: pasto, camino, decoración ---------- */
+function drawWorld(){
+  const W = cv.width/DPR, H = cv.height/DPR;
+  // pasto
+  ctx.fillStyle='#1c2a1f'; ctx.fillRect(0,0,W,H);
+  // patrón sutil
+  ctx.fillStyle='#22331f';
+  for (let x=0;x<W;x+=40) for (let y=0;y<H;y+=40)
+    if (((x/40)+(y/40))%2===0) ctx.fillRect(x,y,40,40);
+}
+function drawDeco(camX, camY){
+  // árboles
+  const trees=[{x:200,y:200},{x:1300,y:250},{x:300,y:700},{x:1200,y:750},{x:800,y:150},{x:600,y:780}];
+  trees.forEach(t=>{
+    const x=t.x-camX, y=t.y-camY;
+    if (x<-80||x>cv.width/DPR+80||y<-120||y>cv.height/DPR+80) return;
+    ctx.fillStyle='#3a2a1a'; roundRect(ctx,x-6,y,12,30,3); ctx.fill();
+    ctx.fillStyle='#2f6b3a';
+    ctx.beginPath(); ctx.arc(x,y-10,26,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x-16,y+2,18,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+16,y+2,18,0,7); ctx.fill();
+  });
+  // estanque
+  const px=900-camX, py=520-camY;
+  ctx.fillStyle='#1c4a6b'; ctx.beginPath(); ctx.ellipse(px,py,90,50,0,0,7); ctx.fill();
+  ctx.fillStyle='#2a6f9b'; ctx.beginPath(); ctx.ellipse(px,py,80,42,0,0,7); ctx.fill();
+}
+function drawCoins(camX, camY){
+  coins.forEach(co=>{
+    if (co.got) return;
+    const x=co.x-camX, y=co.y-camY + Math.sin((perf*0.003)+co.t)*4;
+    if (x<-30||x>cv.width/DPR+30||y<-30||y>cv.height/DPR+30) return;
+    star(ctx,x,y,9,4.5,5,'#ffd166');
+  });
+}
+function star(c,cx,cy,outer,inner,points,color){
+  c.save(); c.beginPath(); c.fillStyle=color; c.translate(cx,cy);
+  for(let i=0;i<points*2;i++){
+    const r=i%2===0?outer:inner, a=(i*Math.PI)/points - Math.PI/2;
+    c[i===0?'moveTo':'lineTo'](Math.cos(a)*r, Math.sin(a)*r);
+  }
+  c.closePath(); c.fill(); c.restore();
+}
+
+/* ---------- loop ---------- */
+let perf = 0, last = 0;
+
+/* ----- MODO AUTO (demo: el chibi juega solo 10s) ----- */
+function autoStart(){
+  AUTO.on = true; AUTO.until = performance.now() + AUTO.dur;
+  AUTO.target = null; AUTO.lastSwitch = 0;
+  coinCount = 0; document.getElementById('coins').textContent = 0;
+  coins.forEach(c => c.got = false);   // reiniciar estrellas
+  player.x = world.w/2; player.y = world.h/2;
+  hint('🤖 Modo automático: 10 segundos');
+}
+function autoStop(){ AUTO.on = false; hint('Modo manual · flechas / WASD'); }
+
+function autoSteer(dt){   // devuelve {dx,dy} normalizados persiguiendo la estrella mas cercana
+  const ahora = performance.now();
+  const left = AUTO.until - ahora;
+  document.getElementById('coins').textContent = coinCount;
+  // fin del auto
+  if (left <= 0){ autoStop(); return {dx:0, dy:0}; }
+  // buscar estrella mas cercana viva
+  let best=null, bd=1e9;
+  coins.forEach(c=>{
+    if (c.got) return;
+    const d = Math.hypot(c.x-player.x, c.y-player.y);
+    if (d < bd){ bd = d; best = c; }
+  });
+  // sin estrellas -> pasear en circulo
+  if (!best){
+    const a = ahora*0.0012;
+    return { dx: Math.cos(a), dy: Math.sin(a) };
+  }
+  AUTO.target = best;
+  const dx = best.x - player.x, dy = best.y - player.y;
+  const m = Math.hypot(dx,dy) || 1;
+  return { dx: dx/m, dy: dy/m };
+}
+
+function loop(t){
+  const dt = Math.min(40, t-last)||16; last = t; perf = t;
+
+  // input teclado
+  let dx=0, dy=0;
+  if (keys['arrowleft']||keys['a']) dx-=1;
+  if (keys['arrowright']||keys['d']) dx+=1;
+  if (keys['arrowup']||keys['w']) dy-=1;
+  if (keys['arrowdown']||keys['s']) dy+=1;
+  // joystick (pantalla), solo si el usuario toca la pantalla (desactiva auto)
+  if (stick.active){ autoStop(); }
+  if (Math.abs(dx)+Math.abs(dy) > 0){ if (AUTO.on) autoStop(); }
+  dx += stick.dx/RAD; dy += stick.dy/RAD;
+  // modo auto si esta activo y no hay input manual
+  if (AUTO.on && !stick.active && Math.abs(dx)+Math.abs(dy) === 0){
+    const s = autoSteer(dt); dx = s.dx; dy = s.dy;
+  }
+  const mag = Math.min(1, Math.hypot(dx,dy));
+  const m = Math.hypot(dx,dy)||1;
+  player.x += (dx/m)*player.speed*mag*dt/1000;
+  player.y += (dy/m)*player.speed*mag*dt/1000;
+  player.x = Math.max(40, Math.min(world.w-40, player.x));
+  player.y = Math.max(60, Math.min(world.h-40, player.y));
+  player.moving = mag > 0.08;
+  player.walkAmt = Math.min(1, mag*1.4);
+  if (dx) player.dir = dx>0?1:-1;
+  player.t += dt/1000;
+
+  // cámara
+  const W = cv.width/DPR, H = cv.height/DPR;
+  let camX = player.x - W/2, camY = player.y - H/2;
+  camX = Math.max(0, Math.min(world.w-W, camX));
+  camY = Math.max(0, Math.min(world.h-H, camY));
+
+  // recoger estrellas
+  coins.forEach(co=>{
+    if (!co.got && Math.hypot(co.x-player.x, co.y-player.y) < 34){
+      co.got = true; coinCount++;
+      document.getElementById('coins').textContent = coinCount;
+      hint(`${coinCount} ★`);
+    }
+  });
+
+  // ----- RENDER -----
+  drawWorld();
+  drawDeco(camX, camY);
+  drawCoins(camX, camY);
+
+  const px = player.x - camX, py = player.y - camY;
+  ctx.save(); ctx.translate(px, py);
+  if (usingSprite){
+    // ── Modo chibi SKZ: sprite de caminata real (12 frames hechos a mano) ──
+    const ready = walkImgs.every(im => im.complete && im.naturalWidth);
+    if (ready){
+      const fps = 12;
+      const idx = player.moving ? (Math.floor(player.t*fps) % walkImgs.length) : 0;
+      const im = walkImgs[idx];
+      const th = 150;                        // alto constante
+      const tw = th * (im.naturalWidth/im.naturalHeight);
+      ctx.save();
+      ctx.scale(player.dir, 1);              // voltear segun direccion
+      ctx.drawImage(im, -tw/2, -th+14, tw, th);
+      ctx.restore();
+    } else {
+      const ch = CHIBIS.find(c => c.id === activeChibi) || CHIBIS[0];
+      withChibiLook(ch, () => {
+        drawChibi(ctx, 1.05, player.dir, player.moving ? player.t*11 : 0, player.walkAmt||0);
+      });
+    }
+  } else {
+    drawChibi(ctx, 1.05, player.dir, player.moving ? player.t*11 : 0, player.walkAmt||0);
+  }
+  ctx.restore();
+
+  // joystick visual
+  if (stick.active){
+    ctx.save();
+    ctx.strokeStyle='rgba(207,199,255,.35)'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(stick.ox, stick.oy, RAD, 0, 7); ctx.stroke();
+    ctx.fillStyle='rgba(77,227,255,.55)';
+    ctx.beginPath(); ctx.arc(stick.ox+stick.dx, stick.oy+stick.dy, 18, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+
+  // marco suave
+  ctx.strokeStyle='rgba(77,227,255,.12)'; ctx.lineWidth=2; ctx.strokeRect(1,1,W-2,H-2);
+
+  requestAnimationFrame(loop);
+}
+
+/* ---------- misc ---------- */
+function drawStatic(){ /* el loop ya redibuja */ }
+let hintTimer=0;
+function hint(txt){
+  const h=document.getElementById('hint');
+  h.textContent = txt; h.style.opacity = 1;
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(()=>{ h.textContent='Flechas / WASD para moverte · recoge ★'; h.style.opacity=1; }, 1400);
+}
+
+/* ---------- init ---------- */
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

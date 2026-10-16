@@ -1,0 +1,10 @@
+# Backups locales
+index.html.bak-*
+*.bak
+*.bak-*
+
+# Sistema
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
